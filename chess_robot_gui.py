@@ -256,8 +256,8 @@ class ChessRobotGUI:
 
         for r in range(8):
             for f in range(8):
-                sq = chess.square(f, 7 - r)
-                x0, y0 = f * SZ, r * SZ
+                sq = chess.square(r, f)
+                x0, y0 = f * SZ, (7 - r) * SZ
                 if highlight_from is not None and sq == highlight_from:
                     fill = hl_from
                 elif highlight_to is not None and sq == highlight_to:
