@@ -75,6 +75,11 @@ _CELL_A = config.BOARD_MM_A / 8
 _CELL_B = config.BOARD_MM_B / 8
 
 
+def flip_rank(sq: str) -> str:
+    """랭크(숫자열) 반전: e2 ↔ e7, a1 ↔ a8 등."""
+    return sq[0] + str(9 - int(sq[1]))
+
+
 # ─────────────────────────────────────────────────────────────
 # 로봇 식별자
 # ─────────────────────────────────────────────────────────────
@@ -261,7 +266,7 @@ class DualDobotController:
         from_col = FILES.index(from_sq[0].lower())
         to_col = FILES.index(to_sq[0].lower())
 
-        self.log(f"[Dual] 수 실행: {from_sq.upper()} → {to_sq.upper()}", "info")
+        self.log(f"[Dual] 수 실행: {flip_rank(from_sq).upper()} → {flip_rank(to_sq).upper()}", "info")
 
         # ── ① 캡처: 상대 말 먼저 묘지로 ──────────────────────
         if board.is_capture(move):
@@ -276,10 +281,10 @@ class DualDobotController:
             cap_mm = square_to_mm_for(cap_robot, cap_sq)
             gy_mm = self._next_graveyard(board.turn)
             self.log(
-                f"[Dual] 캡처: {cap_sq.upper()} → 묘지 (Robot {cap_robot.value})",
+                f"[Dual] 캡처: {flip_rank(cap_sq).upper()} → 묘지 (Robot {cap_robot.value})",
                 "info",
             )
-            self._do_single(cap_col, cap_mm, gy_mm, f"캡처({cap_sq.upper()})")
+            self._do_single(cap_col, cap_mm, gy_mm, f"캡처({flip_rank(cap_sq).upper()})")
 
         # ── ② 말 이동 ──────────────────────────────────────────
         worker = self._select_robot(from_col, to_col)
@@ -302,7 +307,7 @@ class DualDobotController:
                 self._get_rs(worker),
                 from_mm,
                 to_mm,
-                label=f"{from_sq.upper()}→{to_sq.upper()}",
+                label=f"{flip_rank(from_sq).upper()}→{flip_rank(to_sq).upper()}",
             )
             self._go_standby(self._get_rs(worker))
 

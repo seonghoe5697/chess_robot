@@ -49,6 +49,11 @@ COLOR_ERR  = "#ff7f7f"
 COLOR_INFO = "#7fbfff"
 
 
+def flip_rank(sq: str) -> str:
+    """랭크(숫자열) 반전: e2 ↔ e7, a1 ↔ a8 등."""
+    return sq[0] + str(9 - int(sq[1]))
+
+
 # ─────────────────────────────────────────────────────────────
 # 메인 GUI 클래스
 # ─────────────────────────────────────────────────────────────
@@ -256,8 +261,8 @@ class ChessRobotGUI:
 
         for r in range(8):
             for f in range(8):
-                sq = chess.square(r, f)
-                x0, y0 = f * SZ, (7 - r) * SZ
+                sq = chess.square(f, 7 - r)
+                x0, y0 = f * SZ, r * SZ
                 if highlight_from is not None and sq == highlight_from:
                     fill = hl_from
                 elif highlight_to is not None and sq == highlight_to:
@@ -409,13 +414,17 @@ class ChessRobotGUI:
             try:
                 result = self.engine.analyse(self.board)
                 self.pending_move = result.move
-                self.root.after(0, lambda: self.sf_move_var.set(result.move_str))
+                uci = result.uci  # e.g. "e7e5"
+                disp_from = flip_rank(uci[:2]).upper()
+                disp_to   = flip_rank(uci[2:4]).upper()
+                disp_str  = f"{disp_from} → {disp_to}  ({result.san})"
+                self.root.after(0, lambda: self.sf_move_var.set(disp_str))
                 self.root.after(0, lambda: self.sf_eval_var.set(f"평가: {result.eval_str}"))
                 self.root.after(0, lambda: self.btn_approve.config(state="normal"))
                 self.root.after(0, lambda: self.btn_reject.config(state="normal"))
                 self.root.after(0, lambda: self._draw_board(result.move.from_square, result.move.to_square))
                 self.root.after(0, lambda: self._set_badge(self._badge_sf, "준비됨", COLOR_OK))
-                self.log(f"추천: {result.move_str}  평가: {result.eval_str}", "ok")
+                self.log(f"추천: {disp_str}  평가: {result.eval_str}", "ok")
             except Exception as e:
                 self.log(f"분석 오류: {e}", "err")
                 self.root.after(0, lambda: self._set_badge(self._badge_sf, "오류", COLOR_ERR))
@@ -523,8 +532,8 @@ class ChessRobotGUI:
     # 수동 이동
     # ─────────────────────────────────────────────────────────
     def _manual_move(self) -> None:
-        from_sq = self.entry_from.get().strip().lower()
-        to_sq   = self.entry_to.get().strip().lower()
+        from_sq = flip_rank(self.entry_from.get().strip().lower())
+        to_sq   = flip_rank(self.entry_to.get().strip().lower())
         if not from_sq or not to_sq:
             self.log("출발/도착 칸 입력 필요", "warn")
             return
@@ -570,7 +579,7 @@ class ChessRobotGUI:
                         self.dual_ctrl._go_standby(self.dual_ctrl._get_rs(worker))
 
                 self.root.after(0, self._draw_board)
-                self.log(f"수동 이동 완료: {from_sq.upper()} → {to_sq.upper()}", "ok")
+                self.log(f"수동 이동 완료: {flip_rank(from_sq).upper()} → {flip_rank(to_sq).upper()}", "ok")
             except Exception as e:
                 self.log(f"수동 이동 오류: {e}", "err")
             finally:
