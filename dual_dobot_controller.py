@@ -91,11 +91,11 @@ def square_to_mm_for(robot: Robot, square: str) -> tuple:
     row = RANKS.index(square[1])
 
     if robot == Robot.A:
-        x = config.ORIGIN_X_MM + col * (_CELL_A - 0.5)
-        y = config.ORIGIN_Y_MM + row * (_CELL_A + 3)
+        x = config.ORIGIN_X_MM + row * (_CELL_A - 1.8)
+        y = config.ORIGIN_Y_MM + col * (_CELL_A + 0.3)
     else:
-        x = config.ORIGIN_B_X + (7 - col) * _CELL_B
-        y = config.ORIGIN_B_Y + (7 - row) * _CELL_B
+        x = config.ORIGIN_B_X + (7 - row) * _CELL_B
+        y = config.ORIGIN_B_Y + (7 - col) * _CELL_B
 
     return (round(x, 3), round(y, 3))
 

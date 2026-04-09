@@ -88,30 +88,41 @@ class ChessRobotGUI:
         for b in (self._badge_robot_a, self._badge_robot_b, self._badge_vision, self._badge_sf):
             b.pack(side="left", padx=(0, 8))
 
-        btn_row = tk.Frame(top, bg=BG, pady=2)
-        btn_row.pack(fill="x")
+        # ── 1번째 버튼 행 ──────────────────────────────────────
+        btn_row1 = tk.Frame(top, bg=BG, pady=2)
+        btn_row1.pack(fill="x")
         for text, cmd, bg_, fg_ in [
             ("🔲 재캘리브",      self._recalib,        "#2a2a3a", "#aaaaff"),
             ("📷 보드 스캔",     self._scan_board,      "#333",    FG),
             ("♟ 초기 보드 세팅", self._reset_board,     "#1a3a5c", "#aaddff"),
             ("🏠 홈 이동",       self._go_home,         "#2a3a2a", "#aaffaa"),
-            ("⚠ 에러 초기화",   self._clear_alarm,     "#3a1a1a", "#ff9999"),
-            ("⏹ 즉시 정지",     self._emergency_stop,  "#5c1a1a", "#ff4444"),
-            ("🔌 재연결 A",      lambda: self._reconnect(Robot.A), "#1a2a3a", "#aaccff"),
-            ("🔌 재연결 B",      lambda: self._reconnect(Robot.B), "#1a2a3a", "#aaccff"),
         ]:
-            tk.Button(btn_row, text=text, bg=bg_, fg=fg_, font=SFONT,
+            tk.Button(btn_row1, text=text, bg=bg_, fg=fg_, font=SFONT,
                       relief="flat", cursor="hand2", command=cmd,
                       ).pack(side="left", padx=(0, 6), ipady=3, ipadx=6)
 
-        tk.Button(btn_row, text="🧠 모델 불러오기",
+        tk.Button(btn_row1, text="🧠 모델 불러오기",
                   bg="#2a3a2a", fg="#aaffaa", font=SFONT,
                   relief="flat", cursor="hand2", command=self._load_model,
                   ).pack(side="left", ipady=3, ipadx=6)
         self.model_path_var = tk.StringVar(value="더미 모드")
-        tk.Label(btn_row, textvariable=self.model_path_var,
+        tk.Label(btn_row1, textvariable=self.model_path_var,
                  bg=BG, fg=MUT, font=("Consolas", 8),
                  wraplength=300, justify="left").pack(side="left", padx=(6, 0))
+
+        # ── 2번째 버튼 행 ──────────────────────────────────────
+        btn_row2 = tk.Frame(top, bg=BG, pady=2)
+        btn_row2.pack(fill="x")
+        for text, cmd, bg_, fg_ in [
+            ("⚠ 에러 초기화",    self._clear_alarm,                "#3a1a1a", "#ff9999"),
+            ("⏹ 즉시 정지",      self._emergency_stop,             "#5c1a1a", "#ff4444"),
+            ("📷 비전 재연결",    self._reconnect_vision,           "#2a2a3a", "#aaaaff"),
+            ("🔌 로봇A 재연결",   lambda: self._reconnect(Robot.A), "#1a2a3a", "#aaccff"),
+            ("🔌 로봇B 재연결",   lambda: self._reconnect(Robot.B), "#1a2a3a", "#aaccff"),
+        ]:
+            tk.Button(btn_row2, text=text, bg=bg_, fg=fg_, font=SFONT,
+                      relief="flat", cursor="hand2", command=cmd,
+                      ).pack(side="left", padx=(0, 6), ipady=3, ipadx=6)
 
         main = tk.Frame(self.root, bg=BG)
         main.pack(fill="both", expand=True, padx=12, pady=4)
@@ -773,6 +784,28 @@ class ChessRobotGUI:
                 win.destroy()
 
     # ─────────────────────────────────────────────────────────
+    # 비전 재연결
+    # ─────────────────────────────────────────────────────────
+    def _reconnect_vision(self) -> None:
+        def _run():
+            try:
+                self.log("비전 재연결 중...", "info")
+                self.root.after(0, lambda: self._set_badge(
+                    self._badge_vision, "재연결 중...", COLOR_WARN))
+                if self.vision:
+                    self.vision.release()
+                self.vision = ChessVision()
+                status = "더미모드" if self.vision.dummy_mode else "모델OK"
+                color  = COLOR_WARN if self.vision.dummy_mode else COLOR_OK
+                self.root.after(0, lambda: self._set_badge(self._badge_vision, status, color))
+                self.log(f"비전 재연결 완료 ({status})", "ok")
+            except Exception as e:
+                self.log(f"비전 재연결 오류: {e}", "err")
+                self.root.after(0, lambda: self._set_badge(
+                    self._badge_vision, "오류", COLOR_ERR))
+        threading.Thread(target=_run, daemon=True).start()
+
+    # ─────────────────────────────────────────────────────────
     # 재연결
     # ─────────────────────────────────────────────────────────
     def _reconnect(self, robot: Robot) -> None:
@@ -834,11 +867,7 @@ def main() -> None:
     root.geometry(config.WINDOW_SIZE)
     app  = ChessRobotGUI(root)
     root.protocol("WM_DELETE_WINDOW", app.on_close)
-    try:
-        root.mainloop()
-    except KeyboardInterrupt:
-        print("\n[종료] Ctrl+C")
-        app.on_close()
+    root.mainloop()
 
 
 if __name__ == "__main__":
