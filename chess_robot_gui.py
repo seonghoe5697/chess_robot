@@ -25,7 +25,7 @@ import config
 from dual_dobot_controller import (
     DualDobotController, Robot,
     request_abort, square_to_mm_for,
-    COL_A_MAX,
+    ROW_A_MIN, ROW_A_MAX, RANKS,
 )
 from chess_vision import ChessVision
 from chess_engine import ChessEngine, board_from_vision
@@ -47,11 +47,6 @@ COLOR_OK   = "#7fff9a"
 COLOR_WARN = "#ffd080"
 COLOR_ERR  = "#ff7f7f"
 COLOR_INFO = "#7fbfff"
-
-
-def flip_rank(sq: str) -> str:
-    """랭크(숫자열) 반전: e2 ↔ e7, a1 ↔ a8 등."""
-    return sq[0] + str(9 - int(sq[1]))
 
 
 # ─────────────────────────────────────────────────────────────
@@ -414,17 +409,13 @@ class ChessRobotGUI:
             try:
                 result = self.engine.analyse(self.board)
                 self.pending_move = result.move
-                uci = result.uci  # e.g. "e7e5"
-                disp_from = flip_rank(uci[:2]).upper()
-                disp_to   = flip_rank(uci[2:4]).upper()
-                disp_str  = f"{disp_from} → {disp_to}  ({result.san})"
-                self.root.after(0, lambda: self.sf_move_var.set(disp_str))
+                self.root.after(0, lambda: self.sf_move_var.set(result.move_str))
                 self.root.after(0, lambda: self.sf_eval_var.set(f"평가: {result.eval_str}"))
                 self.root.after(0, lambda: self.btn_approve.config(state="normal"))
                 self.root.after(0, lambda: self.btn_reject.config(state="normal"))
                 self.root.after(0, lambda: self._draw_board(result.move.from_square, result.move.to_square))
                 self.root.after(0, lambda: self._set_badge(self._badge_sf, "준비됨", COLOR_OK))
-                self.log(f"추천: {disp_str}  평가: {result.eval_str}", "ok")
+                self.log(f"추천: {result.move_str}  평가: {result.eval_str}", "ok")
             except Exception as e:
                 self.log(f"분석 오류: {e}", "err")
                 self.root.after(0, lambda: self._set_badge(self._badge_sf, "오류", COLOR_ERR))
@@ -498,12 +489,12 @@ class ChessRobotGUI:
             else:
                 rook_from, rook_to = "a8", "d8"
 
-        from_col = ord(rook_from[0]) - ord('a')
-        to_col   = ord(rook_to[0])   - ord('a')
-        worker   = self.dual_ctrl._select_robot(from_col, to_col)
+        from_row = RANKS.index(rook_from[1])
+        to_row   = RANKS.index(rook_to[1])
+        worker   = self.dual_ctrl._select_robot(from_row, to_row)
 
         if worker is None:
-            pk = Robot.A if from_col <= COL_A_MAX else Robot.B
+            pk = Robot.A if from_row >= ROW_A_MIN else Robot.B
             pl = Robot.B if pk == Robot.A else Robot.A
             from_mm = square_to_mm_for(pk, rook_from)
             to_mm   = square_to_mm_for(pl, rook_to)
@@ -532,8 +523,8 @@ class ChessRobotGUI:
     # 수동 이동
     # ─────────────────────────────────────────────────────────
     def _manual_move(self) -> None:
-        from_sq = flip_rank(self.entry_from.get().strip().lower())
-        to_sq   = flip_rank(self.entry_to.get().strip().lower())
+        from_sq = self.entry_from.get().strip().lower()
+        to_sq   = self.entry_to.get().strip().lower()
         if not from_sq or not to_sq:
             self.log("출발/도착 칸 입력 필요", "warn")
             return
@@ -547,23 +538,20 @@ class ChessRobotGUI:
         def _run():
             self.robot_busy = True
             try:
-                from_col = ord(from_sq[0]) - ord('a')
-                to_col   = ord(to_sq[0])   - ord('a')
-
+                from_row = RANKS.index(from_sq[1])
+                to_row   = RANKS.index(to_sq[1])
                 try:
                     move = chess.Move.from_uci(from_sq + to_sq)
                 except Exception:
                     move = None
 
                 if move and move in self.board.legal_moves:
-                    # 합법 수 → execute_move에 위임 (캡처 처리 포함)
                     self.dual_ctrl.execute_move(self.board, move, log_fn=self.log)
                     self.board.push(move)
                 else:
-                    # 강제 이동 — 로봇 선택 후 직접 실행
-                    worker = self.dual_ctrl._select_robot(from_col, to_col)
+                    worker = self.dual_ctrl._select_robot(from_row, to_row)
                     if worker is None:
-                        pk = Robot.A if from_col <= COL_A_MAX else Robot.B
+                        pk = Robot.A if from_row >= ROW_A_MIN else Robot.B
                         pl = Robot.B if pk == Robot.A else Robot.A
                         from_mm = square_to_mm_for(pk, from_sq)
                         to_mm   = square_to_mm_for(pl, to_sq)
@@ -579,7 +567,7 @@ class ChessRobotGUI:
                         self.dual_ctrl._go_standby(self.dual_ctrl._get_rs(worker))
 
                 self.root.after(0, self._draw_board)
-                self.log(f"수동 이동 완료: {flip_rank(from_sq).upper()} → {flip_rank(to_sq).upper()}", "ok")
+                self.log(f"수동 이동 완료: {from_sq.upper()} → {to_sq.upper()}", "ok")
             except Exception as e:
                 self.log(f"수동 이동 오류: {e}", "err")
             finally:

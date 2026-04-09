@@ -66,8 +66,8 @@ GRAVEYARD_A = config.GRAVEYARD_A
 GRAVEYARD_B = config.GRAVEYARD_B
 
 # 담당 열 범위 (col 인덱스: a=0 … h=7)
-COL_A_MIN, COL_A_MAX = 0, 4  # a ~ e
-COL_B_MIN, COL_B_MAX = 3, 7  # d ~ h
+ROW_A_MIN, ROW_A_MAX = 3, 7  # rank 4~8
+ROW_B_MIN, ROW_B_MAX = 0, 4  # rank 1~5
 
 FILES = list("abcdefgh")
 RANKS = list("12345678")
@@ -76,7 +76,6 @@ _CELL_B = config.BOARD_MM_B / 8
 
 
 def flip_rank(sq: str) -> str:
-    """랭크(숫자열) 반전: e2 ↔ e7, a1 ↔ a8 등."""
     return sq[0] + str(9 - int(sq[1]))
 
 
@@ -96,10 +95,10 @@ def square_to_mm_for(robot: Robot, square: str) -> tuple:
     row = RANKS.index(square[1])
 
     if robot == Robot.A:
-        x = config.ORIGIN_X_MM + row * (_CELL_A - 1.8)
+        x = config.ORIGIN_X_MM + (7 - row) * (_CELL_A - 1.8)
         y = config.ORIGIN_Y_MM + col * (_CELL_A + 0.3)
     else:
-        x = config.ORIGIN_B_X + (7 - row) * _CELL_B
+        x = config.ORIGIN_B_X + row * _CELL_B
         y = config.ORIGIN_B_Y + (7 - col) * _CELL_B
 
     return (round(x, 3), round(y, 3))
@@ -263,10 +262,10 @@ class DualDobotController:
         uci = move.uci()
         from_sq = uci[:2]
         to_sq = uci[2:4]
-        from_col = FILES.index(from_sq[0].lower())
-        to_col = FILES.index(to_sq[0].lower())
+        from_row = RANKS.index(from_sq[1])
+        to_row = RANKS.index(to_sq[1])
 
-        self.log(f"[Dual] 수 실행: {flip_rank(from_sq).upper()} → {flip_rank(to_sq).upper()}", "info")
+        self.log(f"[Dual] 수 실행: {from_sq.upper()} → {to_sq.upper()}", "info")
 
         # ── ① 캡처: 상대 말 먼저 묘지로 ──────────────────────
         if board.is_capture(move):
@@ -276,21 +275,21 @@ class DualDobotController:
             else:
                 cap_sq = to_sq
 
-            cap_col = FILES.index(cap_sq[0].lower())
-            cap_robot = Robot.A if COL_A_MIN <= cap_col <= COL_A_MAX else Robot.B
+            cap_row = RANKS.index(cap_sq[1])
+            cap_robot = Robot.A if ROW_A_MIN <= cap_row <= ROW_A_MAX else Robot.B
             cap_mm = square_to_mm_for(cap_robot, cap_sq)
             gy_mm = self._next_graveyard(board.turn)
             self.log(
-                f"[Dual] 캡처: {flip_rank(cap_sq).upper()} → 묘지 (Robot {cap_robot.value})",
+                f"[Dual] 캡처: {cap_sq.upper()} → 묘지 (Robot {cap_robot.value})",
                 "info",
             )
-            self._do_single(cap_col, cap_mm, gy_mm, f"캡처({flip_rank(cap_sq).upper()})")
+            self._do_single(cap_row, cap_mm, gy_mm, f"캡처({cap_sq.upper()})")
 
         # ── ② 말 이동 ──────────────────────────────────────────
-        worker = self._select_robot(from_col, to_col)
+        worker = self._select_robot(from_row, to_row)
 
         if worker is None:
-            picker_robot = Robot.A if from_col <= COL_A_MAX else Robot.B
+            picker_robot = Robot.A if from_row >= ROW_A_MIN else Robot.B
             placer_robot = self._other(picker_robot)
             from_mm = square_to_mm_for(picker_robot, from_sq)
             to_mm = square_to_mm_for(placer_robot, to_sq)
@@ -307,7 +306,7 @@ class DualDobotController:
                 self._get_rs(worker),
                 from_mm,
                 to_mm,
-                label=f"{flip_rank(from_sq).upper()}→{flip_rank(to_sq).upper()}",
+                label=f"{from_sq.upper()}→{to_sq.upper()}",
             )
             self._go_standby(self._get_rs(worker))
 
@@ -316,12 +315,13 @@ class DualDobotController:
     # ─────────────────────────────────────────────────────────
     # 로봇 선택
     # ─────────────────────────────────────────────────────────
-    def _select_robot(self, from_col: int, to_col: int) -> Optional[Robot]:
-        a_ok = COL_A_MIN <= from_col <= COL_A_MAX and COL_A_MIN <= to_col <= COL_A_MAX
-        b_ok = COL_B_MIN <= from_col <= COL_B_MAX and COL_B_MIN <= to_col <= COL_B_MAX
+    def _select_robot(self, from_row: int, to_row: int) -> Optional[Robot]:
+        a_ok = ROW_A_MIN <= from_row <= ROW_A_MAX and ROW_A_MIN <= to_row <= ROW_A_MAX
+        b_ok = ROW_B_MIN <= from_row <= ROW_B_MAX and ROW_B_MIN <= to_row <= ROW_B_MAX
 
         if a_ok and b_ok:
-            mid_x = config.ORIGIN_X_MM + ((from_col + to_col) / 2) * _CELL_A
+            mid_row = (from_row + to_row) / 2
+            mid_x = config.ORIGIN_X_MM + mid_row * _CELL_A
             return (
                 Robot.A if abs(mid_x - HOME_A_X) <= abs(mid_x - HOME_B_X) else Robot.B
             )
@@ -367,8 +367,8 @@ class DualDobotController:
     # ─────────────────────────────────────────────────────────
     # 단일 픽앤플레이스 (캡처용)
     # ─────────────────────────────────────────────────────────
-    def _do_single(self, col: int, from_mm: tuple, to_mm: tuple, label: str) -> None:
-        rs = self._ra if COL_A_MIN <= col <= COL_A_MAX else self._rb
+    def _do_single(self, row: int, from_mm: tuple, to_mm: tuple, label: str) -> None:
+        rs = self._ra if ROW_A_MIN <= row <= ROW_A_MAX else self._rb
         other = self._other(rs.robot)
         self._park_other(other)
         self._pick_and_place_rs(rs, from_mm, to_mm, label=label)
