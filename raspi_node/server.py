@@ -14,15 +14,69 @@ class RobotCommand(BaseModel):
     params: Optional[dict] = None
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
+async def monitor_page():
     return """
     <html>
-        <head><title>Tobot Monitor</title></head>
+        <head>
+            <title>Chess Robot Real-time Monitor</title>
+            <style>
+                body { font-family: sans-serif; background: #f0f0f0; padding: 20px; }
+                .container { display: flex; gap: 20px; }
+                .video-section { flex: 1; background: white; padding: 15px; border-radius: 8px; }
+                .history-section { width: 400px; background: white; padding: 15px; border-radius: 8px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; font-size: 14px; }
+                th { background: #eee; }
+                .status-running { color: orange; font-weight: bold; }
+                .status-done { color: green; font-weight: bold; }
+                .status-error { color: red; font-weight: bold; }
+            </style>
+        </head>
         <body>
-            <h1>Tobot Chess Real-time Feed</h1>
-            <img src="/video_feed" width="640">
-            <h3>System Status</h3>
-            <iframe src="/state" width="640" height="100" style="border:none;"></iframe>
+            <h1> Chess Robot Live Dashboard</h1>
+            <div class="container">
+                <div class="video-section">
+                    <h3>Live Vision</h3>
+                    <img src="/video_feed" style="width:100%; border-radius:4px;">
+                </div>
+                <div class="history-section">
+                    <h3>Recent History (Last 5)</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history_table">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <script>
+                async function updateDashboard() {
+                    try {
+                        const res = await fetch('/state');
+                        const data = await res.json();
+                        const history = data.logic.history || [];
+                        
+                        const tableBody = document.getElementById('history_table');
+                        tableBody.innerHTML = history.map(item => `
+                            <tr>
+                                <td>${item.time}</td>
+                                <td class="status-${item.status}">${item.status.toUpperCase()}</td>
+                                <td>${JSON.stringify(item.data.command || '-')}</td>
+                            </tr>
+                        `).join('');
+                    } catch (e) { console.error("Update failed", e); }
+                }
+
+                // 1초마다 자동 업데이트
+                setInterval(updateDashboard, 1000);
+                updateDashboard();
+            </script>
         </body>
     </html>
     """
