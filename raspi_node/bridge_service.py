@@ -1,21 +1,33 @@
-# 이 파일은 로봇의 현재 상태를 json 파일로 저장하고 읽어오는 역할을 합니다.
-
 import json
 import os
+from datetime import datetime
 
 STATE_FILE = "data/state/bridge_state.json"
+LOG_FILE = "data/state/command_log.txt"
 
-def get_state():
-    if not os.path.exists(STATE_FILE):
-        return {"status": "idle", "last_command": None}
-    with open(STATE_FILE, 'r') as f:
-        return json.load(f)
+# 폴더 자동 생성
+os.makedirs("data/state", exist_ok=True)
 
-def update_state(status, command=None):
-    state = get_state()
-    state["status"] = status
-    if command:
-        state["last_command"] = command
-    
+async def update_state(status: str, params: dict = None):
+    state_data = {
+        "status": status,
+        "last_update": datetime.now().isoformat(),
+        "params": params or {}
+    }
+    # 파일 쓰기
     with open(STATE_FILE, 'w') as f:
-        json.dump(state, f)
+        json.dump(state_data, f, indent=4)
+    
+    # 로그 기록
+    with open(LOG_FILE, 'a') as f:
+        f.write(f"[{datetime.now()}] Status: {status} | Data: {params}\n")
+
+async def get_state():
+    if not os.path.exists(STATE_FILE):
+        return {"status": "idle", "msg": "No state file found"}
+    
+    try:
+        with open(STATE_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        return {"status": "error", "msg": str(e)}
