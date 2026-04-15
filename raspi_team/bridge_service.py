@@ -31,6 +31,8 @@ async def update_state(status: str, params: dict = None):
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
     with open(STATE_FILE, 'w') as f:
         json.dump({"history": history}, f, indent=4)
+
+
 async def get_state():
     if not os.path.exists(STATE_FILE):
         return {

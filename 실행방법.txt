@@ -1,0 +1,14 @@
+리눅스 터미널에서  라즈베리파이서버 연결하여 비젼 활성화 후 메인런처 실행
+1. shh로 라즈베리파이서버 연결
+- ssh pi@192.168.0.133 (pw:1234)
+2. 비젼 서버 활성화
+- cd Documents/chess_robot/raspi_node
+- python server.py
+3. 브라우저에서 비전서버 확인
+- http://192.168.0.133:8000/
+4. vs코드에서 integrated_chess_project폴더의 main_launcher.py 실행
+5. PI 카메라 서버 연결상태 확인
+6. SW 분석기 활성화 후 프로그램 테스트
+
+
+
