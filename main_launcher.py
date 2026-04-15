@@ -110,7 +110,7 @@ class LauncherApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Tobot Chess 통합 런처")
-        self.root.geometry("980x760")
+        self.root.geometry("1600x1250")
         self.root.configure(bg=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
