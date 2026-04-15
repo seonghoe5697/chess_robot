@@ -1,0 +1,4 @@
+.integrate
+**/__pycache__
+*.json
+model.pt
