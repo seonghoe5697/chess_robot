@@ -3,31 +3,49 @@ import os
 from datetime import datetime
 
 STATE_FILE = "data/state/bridge_state.json"
-LOG_FILE = "data/state/command_log.txt"
-
-# 폴더 자동 생성
-os.makedirs("data/state", exist_ok=True)
+MAX_HISTORY = 5
 
 async def update_state(status: str, params: dict = None):
-    state_data = {
-        "status": status,
-        "last_update": datetime.now().isoformat(),
-        "params": params or {}
-    }
-    # 파일 쓰기
-    with open(STATE_FILE, 'w') as f:
-        json.dump(state_data, f, indent=4)
-    
-    # 로그 기록
-    with open(LOG_FILE, 'a') as f:
-        f.write(f"[{datetime.now()}] Status: {status} | Data: {params}\n")
+    # 1. 기존 데이터 로드 (없으면 빈 리스트)
+    history = []
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as f:
+                data = json.load(f)
+                history = data.get("history", [])
+        except:
+            history = []
 
+    # 2. 새 상태 생성
+    new_entry = {
+        "status": status,
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "data": params or {}
+    }
+
+    # 3. 리스트 맨 앞에 추가하고 최대 개수(5개) 유지
+    history.insert(0, new_entry)
+    history = history[:MAX_HISTORY]
+
+    # 4. 파일 저장
+    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    with open(STATE_FILE, 'w') as f:
+        json.dump({"history": history}, f, indent=4)
 async def get_state():
     if not os.path.exists(STATE_FILE):
-        return {"status": "idle", "msg": "No state file found"}
-    
+        return {
+            "camera": {"status": "unknown"},
+            "logic": {"history": []}
+        }
     try:
         with open(STATE_FILE, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+        return {
+            "camera": {"status": "ok"},
+            "logic": data
+        }
     except Exception as e:
-        return {"status": "error", "msg": str(e)}
+        return {
+            "camera": {"status": "error"},
+            "logic": {"history": [], "error": str(e)}
+        }
