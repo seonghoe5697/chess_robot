@@ -1,6 +1,0 @@
-torch
-torchvision
-streamlit
-python-chess
-Pillow
-tqdm
