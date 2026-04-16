@@ -433,7 +433,8 @@ class ChessRobotGUI:
                     img = img.resize((lw, lh), Image.LANCZOS)
                 imgtk = ImageTk.PhotoImage(image=img)
                 self.root.after(0, self._update_cam, imgtk)
-            except Exception:
+            except Exception as e:
+                print(f"[CAM ERR] {e}")
                 pass
             time.sleep(interval)
 

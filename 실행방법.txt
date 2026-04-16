@@ -2,7 +2,8 @@
 1. shh로 라즈베리파이서버 연결
 - ssh pi@192.168.0.133 (pw:1234)
 2. 비젼 서버 활성화
-- cd Documents/chess_robot/raspi_node
+- cd Documents/chess_robot/raspi_team
+- source ../venv/bin/activate
 - python server.py
 3. 브라우저에서 비전서버 확인
 - http://192.168.0.133:8000/
