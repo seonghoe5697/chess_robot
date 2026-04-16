@@ -90,6 +90,16 @@ class RobotBridge:
         except Exception as e:
             print(f"[RobotBridge] 홈 이동 오류: {e}")
 
+    def emergency_stop(self) -> None:
+        from dual_dobot_controller import request_abort
+        request_abort()
+        if self._ctrl is None:
+            return
+        try:
+            self._ctrl.emergency_stop_and_recover()
+        except Exception as e:
+            print(f"[RobotBridge] 비상 정지 오류: {e}")
+
     def quit(self) -> None:
         if self._ctrl is None:
             return

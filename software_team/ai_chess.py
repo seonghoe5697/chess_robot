@@ -65,10 +65,11 @@ class AutoChessGUI:
 
         btn = tk.Frame(self.root, bg="#f0f0f0")
         btn.pack(pady=5)
-        tk.Button(btn, text="AI 대결 시작",
-                  command=self._start_ai_vs_ai).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn, text="🏠 홈 이동",
-                  command=self._robot_go_home, bg="#e8f5e9").pack(side=tk.LEFT, padx=5)
+        self.btn_start = tk.Button(btn, text="AI 대결 시작", command=self._start_ai_vs_ai)
+        self.btn_start.pack(side=tk.LEFT, padx=5)
+
+        self.btn_reset = tk.Button(btn, text="리셋", command=self._reset_game, bg="#fff9c4", width=12)
+        self.btn_reset.pack(side=tk.LEFT, padx=5)
 
         self._status_var = tk.StringVar(value="초기화 중...")
         tk.Label(self.root, textvariable=self._status_var,
@@ -157,6 +158,30 @@ class AutoChessGUI:
             self.root.after(0, lambda: self._status_var.set("이동 완료"))
 
         self.robot.execute_async(pre_board, move, on_done=on_done)
+    
+    def _reset_game(self):
+        self.is_running = False
+        self._robot_busy = True
+        self._status_var.set("리셋 중 — 정지 중...")
+        self.board.reset()
+        self.selected_square = None
+        self._draw_board()
+
+        # 리셋 완료 전까지 버튼 비활성화
+        self.btn_reset.config(state="disabled")
+        self.btn_start.config(state="disabled")
+
+        def _stop_then_ready():
+            self.robot.emergency_stop()
+            self._robot_busy = False
+            self.is_running = True
+            self.root.after(0, lambda: [
+                self.btn_reset.config(state="normal"),
+                self.btn_start.config(state="normal"),
+                self._status_var.set("리셋 완료 — AI 대결 시작을 누르세요"),
+            ])
+
+        threading.Thread(target=_stop_then_ready, daemon=True).start()
 
     def _start_ai_vs_ai(self):
         if self._robot_busy:
@@ -208,11 +233,6 @@ class AutoChessGUI:
         else:
             messagebox.showinfo("게임 종료",
                                 "백색 승리!" if res == "1-0" else "흑색 승리!")
-
-    def _robot_go_home(self):
-        if self._robot_busy:
-            return
-        threading.Thread(target=self.robot.go_home, daemon=True).start()
 
     def on_closing(self):
         self.is_running = False
