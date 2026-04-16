@@ -42,7 +42,7 @@
   
 ## 4.시스템 아키텍쳐 (Sytem Architecture)
 <!-- ![system architecture](/docs/sys.png) -->
-<img src="./docs/sys.png" width=100% height=200>  
+<img src="./docs/sys.png" width=100% height="250px">  
 
 ## 5.주요 기능 (Core Features)
 * **통합 런처**: Streamlit(분석기), Tkinter(로봇 GUI), FastAPI(서버)를 개별 프로세스로 실행하여 안전성 확보.
@@ -81,12 +81,12 @@ pip install -r requirements.txt
 <table border="0">
   <tr>
     <td width="50%" align="center">
-      <img src="./docs/chess.gif" width="100%" alt="GUI">
+      <img src="./docs/chess.gif" width="100%" height="150px"alt="GUI">
       <br> <b>GUI</b>
     </td>
     <td width="50%" align="center">
-      <video src="./docs/robot.gif" width="100%" controls muted autoplay loop>
-      </video>
+      <img src="./docs/robot.gif" width="100%" height="150px" alt="motion">
+      </img>
       <br> <b>실제 동작</b>
     </td>
   </tr>
