@@ -268,7 +268,7 @@ class DualDobotController:
             cap_row = RANKS.index(cap_sq[1])
             cap_robot = Robot.A if ROW_A_MIN <= cap_row <= ROW_A_MAX else Robot.B
             cap_mm = square_to_mm_for(cap_robot, cap_sq)
-            gy_mm = self._next_graveyard(board.turn)
+            gy_mm = self._next_graveyard(cap_robot)
             self.log(
                 f"[Dual] 캡처: {cap_sq.upper()} → 묘지 (Robot {cap_robot.value})",
                 "info",
@@ -492,11 +492,11 @@ class DualDobotController:
     # ─────────────────────────────────────────────────────────
     # 묘지
     # ─────────────────────────────────────────────────────────
-    def _next_graveyard(self, attacker_color: chess.Color) -> tuple:
-        if attacker_color == chess.WHITE:
-            return GRAVEYARD_B
-        else:
+    def _next_graveyard(self, robot: Robot) -> tuple:
+        if robot == Robot.A:
             return GRAVEYARD_A
+        else:
+            return GRAVEYARD_B
 
     # ─────────────────────────────────────────────────────────
     # 진단
