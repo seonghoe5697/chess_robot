@@ -15,36 +15,21 @@ class CameraService:
         os.makedirs(self.save_dir, exist_ok=True)
         self.stream_url = f"{PI_HOST}/video_feed"
         self.capture_url = f"{PI_HOST}/capture"
+        self._cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
         print(f"[CameraService] 라즈베리파이 스트림: {self.stream_url}")
 
     def get_frames(self):
-        """라즈베리파이 /video_feed 스트림을 그대로 프록시."""
+        """카메라에서 직접 읽어서 스트리밍."""
         while True:
-            try:
-                req = urllib.request.urlopen(self.stream_url, timeout=5)
-                boundary = b"--frame"
-                buf = b""
-                while True:
-                    chunk = req.read(4096)
-                    if not chunk:
-                        break
-                    buf += chunk
-                    # multipart 경계 분리
-                    while boundary in buf:
-                        _, buf = buf.split(boundary, 1)
-                        if b"\r\n\r\n" in buf:
-                            header, rest = buf.split(b"\r\n\r\n", 1)
-                            # 다음 경계까지가 JPEG 데이터
-                            if boundary in rest:
-                                jpg_data, buf = rest.split(boundary, 1)
-                                jpg_data = jpg_data.rstrip(b"\r\n")
-                                yield (b"--frame\r\n"
-                                       b"Content-Type: image/jpeg\r\n\r\n"
-                                       + jpg_data + b"\r\n")
-            except Exception as e:
-                print(f"[CameraService] 스트림 끊김: {e} — 2초 후 재연결")
-                # 연결 실패 시 빈 프레임 대신 잠깐 대기
-                time.sleep(2)
+                ret, frame = self._cap.read()
+                if not ret:
+                    print("[CameraService] 카메라 읽기 실패")
+                    time.sleep(0.1)
+                    continue
+                _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                yield (b"--frame\r\n"
+                       b"Content-Type: image/jpeg\r\n\r\n"
+                       + jpeg.tobytes() + b"\r\n")
 
     async def capture_board(self):
         """라즈베리파이 /capture 엔드포인트 호출 → 이미지를 로컬에 저장."""

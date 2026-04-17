@@ -11,8 +11,6 @@ Tobot Chess Integrated Launcher
     │   ├── ai_chess.py         (도봇 연동 버전)
     │   ├── robot_bridge.py     (hardware_team 자동 참조)
     │   ├── app.py
-    │   ├── vision.py           (비전 연동)
-    │   ├── setup_vision.py     (최초 1회 캘리브)
     │   └── core/ ...
     ├── hardware_team/
     │   ├── dual_dobot_controller.py
@@ -29,7 +27,6 @@ Tobot Chess Integrated Launcher
   robot_bridge.py 가 hardware_team/ 을 자동으로 sys.path 에 추가합니다.
 - 도봇 없이 테스트할 때: software_team/robot_bridge.py 의 ROBOT_ENABLED = False
 - Pi 서버(server.py)는 라즈베리파이에서 직접 실행하세요. (IP: 192.168.0.133)
-- 비전 셋업 버튼: Pi가 연결된 상태에서만 활성화됩니다.
 """
 
 from __future__ import annotations
@@ -126,7 +123,7 @@ class LauncherApp:
             "sw_human": ManagedProcess(
                 "사람 vs AI + 도봇",
                 [PYTHON, "ai_human_chess.py"],
-                SW_DIR,
+                SW_DIR,   # software_team/ 에서 실행 → robot_bridge가 hw 경로 자동 추가
             ),
             "sw_auto": ManagedProcess(
                 "AI vs AI + 도봇",
@@ -140,13 +137,9 @@ class LauncherApp:
             ),
         }
 
-        # 셋업용 1회성 프로세스 (ManagedProcess로 관리 안 함)
-        self._setup_proc: subprocess.Popen | None = None
-
         self.status_labels: dict[str, tk.Label] = {}
         self.log_text:      tk.Text | None       = None
         self.pi_state_var = tk.StringVar(value="Pi 상태: 확인 전")
-        self._pi_connected = False
 
         self._build_ui()
         self._start_monitors()
@@ -226,35 +219,21 @@ class LauncherApp:
                           bg="#6e1111", fg="white", relief="flat",
                           width=8).pack(side="left", padx=2)
 
-        # ── 라즈베리파이 섹션 ─────────────────────────────
+        # 라즈베리파이 상태 카드 (버튼 없음)
         pi_box = tk.Frame(self.tab_control, bg=CARD, padx=12, pady=10)
         pi_box.pack(fill="x", padx=4, pady=8)
         tk.Label(pi_box, text="라즈베리파이 팀  —  Pi에서 직접 실행",
                  bg=CARD, fg=FG, font=("Arial", 13, "bold")).pack(anchor="w", pady=(0, 4))
         pi_row = tk.Frame(pi_box, bg=CARD)
         pi_row.pack(fill="x", pady=5)
-
         tk.Label(pi_row, text="Pi 카메라 서버",
                  bg=CARD, fg=FG, width=22, anchor="w",
                  font=("Arial", 10, "bold")).pack(side="left")
         tk.Label(pi_row, text=f"라즈베리파이에서 직접 실행 | {PI_HOST}",
                  bg=CARD, fg=MUTED, anchor="w").pack(side="left", fill="x", expand=True)
-
-        # 상태 라벨 자리 비움 (다른 행들과 정렬 맞추기용)
-        tk.Label(pi_row, text="", bg=CARD, width=8).pack(side="left", padx=8)
-
-        # 연결 상태 라벨 — 실행 버튼 자리에 중앙정렬
         self.pi_conn_label = tk.Label(pi_row, text="확인 중",
-                                      bg=CARD, fg=WARN, width=8,
-                                      anchor="center")
-        self.pi_conn_label.pack(side="left", padx=2)
-
-        # 비전 셋업 버튼 — 중지 버튼 자리에 중앙정렬
-        self.setup_btn = tk.Button(pi_row, text="비전 셋업",
-                                   command=self._run_setup_vision,
-                                   bg="#1f6feb", fg="white", relief="flat",
-                                   width=8, state="disabled")
-        self.setup_btn.pack(side="left", padx=2)
+                                      bg=CARD, fg=WARN, width=8)
+        self.pi_conn_label.pack(side="left", padx=8)
 
         info = tk.Frame(self.tab_control, bg=BG)
         info.pack(fill="x", padx=4, pady=(8, 0))
@@ -264,8 +243,7 @@ class LauncherApp:
                 "• sw_human / sw_auto 는 software_team/ 에서 실행되며, "
                 "robot_bridge.py 가 hardware_team/ 을 자동으로 참조합니다.\n"
                 "• 도봇 없이 테스트: software_team/robot_bridge.py → ROBOT_ENABLED = False\n"
-                f"• Pi 서버가 켜지면 {PI_HOST} 에서 카메라/히스토리를 확인할 수 있습니다.\n"
-                "• 비전 셋업: Pi 연결 시 활성화. 체스판 배치 후 1회 실행하면 CNN 비전 연동 모드로 전환됩니다."
+                f"• Pi 서버가 켜지면 {PI_HOST} 에서 카메라/히스토리를 확인할 수 있습니다."
             ),
             bg=BG, fg=MUTED, justify="left", anchor="w",
         ).pack(anchor="w")
@@ -321,54 +299,6 @@ class LauncherApp:
                 0, lambda l=line.rstrip(), n=mp.name: self.log(f"[{n}] {l}")
             )
 
-    # ── 비전 셋업 실행 ────────────────────────────────────
-    def _run_setup_vision(self) -> None:
-        # 중복 실행 방지
-        if self._setup_proc and self._setup_proc.poll() is None:
-            messagebox.showinfo("진행 중", "비전 셋업이 이미 실행 중입니다.")
-            return
-
-        # sw_auto/sw_human 실행 중이면 경고 (카메라 경합 방지)
-        busy = [self.processes[k].name for k in ("sw_auto", "sw_human")
-                if self.processes[k].is_running()]
-        if busy:
-            if not messagebox.askyesno(
-                "실행 중인 프로그램",
-                f"다음 프로그램이 실행 중입니다:\n - {', '.join(busy)}\n\n"
-                "카메라 경합으로 셋업이 실패할 수 있습니다. 계속 진행할까요?",
-            ):
-                return
-
-        env = os.environ.copy()
-        env.setdefault("PYTHONUNBUFFERED", "1")
-        env.setdefault("QT_QPA_PLATFORM", "xcb")
-        try:
-            self._setup_proc = subprocess.Popen(
-                [PYTHON, "setup_vision.py"],
-                cwd=str(SW_DIR),
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-            self.log("▶ 비전 셋업 시작  (software_team/setup_vision.py)")
-            threading.Thread(
-                target=self._pipe_setup_output, daemon=True
-            ).start()
-        except Exception as e:
-            self.log(f"✗ 비전 셋업 실행 실패: {e}")
-            messagebox.showerror("실행 실패", f"비전 셋업\n{e}")
-
-    def _pipe_setup_output(self) -> None:
-        if not self._setup_proc or not self._setup_proc.stdout:
-            return
-        for line in self._setup_proc.stdout:
-            self.root.after(
-                0, lambda l=line.rstrip(): self.log(f"[비전 셋업] {l}")
-            )
-        self.root.after(0, lambda: self.log("■ 비전 셋업 종료"))
-
     # ── 모니터링 ─────────────────────────────────────────────
 
     def _start_monitors(self) -> None:
@@ -391,34 +321,16 @@ class LauncherApp:
                 history = data.get("logic", {}).get("history", [])
                 last    = history[0] if history else {}
                 txt     = f"Pi: {last.get('status','ok')}  {last.get('time','')}"
-                self._pi_connected = True
                 self.root.after(0, lambda t=txt: self.pi_state_var.set(t))
-                self.root.after(0, self._apply_pi_connected)
+                self.root.after(0, lambda: self.pi_conn_label.config(text="연결됨", fg=OK))
             except Exception:
-                self._pi_connected = False
                 self.root.after(0, lambda: self.pi_state_var.set("Pi 상태: 서버 미연결"))
-                self.root.after(0, self._apply_pi_disconnected)
+                self.root.after(0, lambda: self.pi_conn_label.config(text="미연결", fg=ERR))
             time.sleep(2)
-
-    def _apply_pi_connected(self) -> None:
-        self.pi_conn_label.config(text="연결됨", fg=OK)
-        self.setup_btn.config(state="normal")
-
-    def _apply_pi_disconnected(self) -> None:
-        self.pi_conn_label.config(text="미연결", fg=ERR)
-        self.setup_btn.config(state="disabled")
 
     def on_close(self) -> None:
         if messagebox.askyesno("종료", "실행 중인 하위 프로그램을 모두 종료하고 닫을까요?"):
             self.stop_all()
-            # 셋업 프로세스도 함께 종료
-            if self._setup_proc and self._setup_proc.poll() is None:
-                try:
-                    self._setup_proc.terminate()
-                    self._setup_proc.wait(timeout=3)
-                except Exception:
-                    try: self._setup_proc.kill()
-                    except Exception: pass
             self.root.destroy()
 
 
